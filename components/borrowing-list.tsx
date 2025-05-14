@@ -1,95 +1,114 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { Search, Filter, BookOpen } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Badge } from "@/components/ui/badge"
 import { useToast } from "@/hooks/use-toast"
+import { getBorrowings, returnBook, extendBorrowing } from "@/app/actions/borrowings"
 
-// Sample borrowing data
-const sampleBorrowings = [
-  {
-    id: 1,
-    bookTitle: "Clean Code",
-    bookId: 1,
-    borrower: "John Doe",
-    borrowerId: 1,
-    borrowDate: "2023-04-15",
-    dueDate: "2023-05-15",
-    status: "borrowed",
-  },
-  {
-    id: 2,
-    bookTitle: "The Pragmatic Programmer",
-    bookId: 2,
-    borrower: "Jane Smith",
-    borrowerId: 2,
-    borrowDate: "2023-04-20",
-    dueDate: "2023-05-20",
-    status: "borrowed",
-  },
-  {
-    id: 3,
-    bookTitle: "Design Patterns",
-    bookId: 3,
-    borrower: "John Doe",
-    borrowerId: 1,
-    borrowDate: "2023-03-10",
-    dueDate: "2023-04-10",
-    status: "overdue",
-  },
-  {
-    id: 4,
-    bookTitle: "Atomic Habits",
-    bookId: 4,
-    borrower: "Emily Davis",
-    borrowerId: 4,
-    borrowDate: "2023-04-05",
-    dueDate: "2023-05-05",
-    status: "returned",
-    returnDate: "2023-04-25",
-  },
-  {
-    id: 5,
-    bookTitle: "Sapiens: A Brief History of Humankind",
-    bookId: 5,
-    borrower: "Robert Johnson",
-    borrowerId: 3,
-    borrowDate: "2023-04-01",
-    dueDate: "2023-05-01",
-    status: "returned",
-    returnDate: "2023-04-28",
-  },
-]
+interface Book {
+  id: string
+  title: string
+  author: string
+}
+
+interface Borrowing {
+  id: string
+  book_id: string
+  user_id: string
+  borrow_date: string
+  due_date: string
+  return_date: string | null
+  status: "borrowed" | "returned" | "overdue"
+  created_at: string
+  updated_at: string
+  books: Book
+}
 
 export function BorrowingList() {
+  const [borrowings, setBorrowings] = useState<Borrowing[]>([])
   const [searchTerm, setSearchTerm] = useState("")
+  const [isLoading, setIsLoading] = useState(true)
   const { toast } = useToast()
 
-  const filteredBorrowings = sampleBorrowings.filter(
+  useEffect(() => {
+    async function fetchBorrowings() {
+      setIsLoading(true)
+      try {
+        const { borrowings, error } = await getBorrowings()
+        if (error) {
+          toast({
+            title: "Error fetching borrowings",
+            description: error,
+            variant: "destructive",
+          })
+        } else {
+          setBorrowings(borrowings)
+        }
+      } catch (error) {
+        toast({
+          title: "Error fetching borrowings",
+          description: "An unexpected error occurred.",
+          variant: "destructive",
+        })
+      } finally {
+        setIsLoading(false)
+      }
+    }
+
+    fetchBorrowings()
+  }, [toast])
+
+  const filteredBorrowings = borrowings.filter(
     (borrowing) =>
-      borrowing.bookTitle.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      borrowing.borrower.toLowerCase().includes(searchTerm.toLowerCase()),
+      borrowing.books.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      borrowing.user_id.toLowerCase().includes(searchTerm.toLowerCase()),
   )
 
-  const handleReturn = (borrowing: (typeof sampleBorrowings)[0]) => {
+  const handleReturn = async (borrowing: Borrowing) => {
     if (borrowing.status === "returned") {
       toast({
         title: "Already returned",
-        description: `This book has already been returned on ${borrowing.returnDate}.`,
+        description: `This book has already been returned on ${new Date(borrowing.return_date!).toLocaleDateString()}.`,
       })
       return
     }
 
-    toast({
-      title: "Book returned",
-      description: `"${borrowing.bookTitle}" has been marked as returned.`,
-    })
+    try {
+      const { success, error } = await returnBook(borrowing.id)
+
+      if (error) {
+        toast({
+          title: "Failed to return book",
+          description: error,
+          variant: "destructive",
+        })
+      } else {
+        toast({
+          title: "Book returned",
+          description: `"${borrowing.books.title}" has been marked as returned.`,
+        })
+
+        // Update local state to reflect the change
+        setBorrowings(
+          borrowings.map((b) =>
+            b.id === borrowing.id ? { ...b, status: "returned", return_date: new Date().toISOString() } : b,
+          ),
+        )
+      }
+    } catch (error) {
+      toast({
+        title: "Failed to return book",
+        description: "An unexpected error occurred.",
+        variant: "destructive",
+      })
+    }
   }
 
-  const handleExtend = (borrowing: (typeof sampleBorrowings)[0]) => {
+  const handleExtend = async (borrowing: Borrowing) => {
     if (borrowing.status === "returned") {
       toast({
         title: "Cannot extend",
@@ -99,10 +118,53 @@ export function BorrowingList() {
       return
     }
 
-    toast({
-      title: "Due date extended",
-      description: `The due date for "${borrowing.bookTitle}" has been extended by 14 days.`,
-    })
+    try {
+      const { success, error } = await extendBorrowing(borrowing.id)
+
+      if (error) {
+        toast({
+          title: "Failed to extend due date",
+          description: error,
+          variant: "destructive",
+        })
+      } else {
+        toast({
+          title: "Due date extended",
+          description: `The due date for "${borrowing.books.title}" has been extended by 14 days.`,
+        })
+
+        // Update local state to reflect the change
+        const currentDueDate = new Date(borrowing.due_date)
+        const newDueDate = new Date(currentDueDate)
+        newDueDate.setDate(newDueDate.getDate() + 14)
+
+        setBorrowings(
+          borrowings.map((b) =>
+            b.id === borrowing.id
+              ? {
+                  ...b,
+                  due_date: newDueDate.toISOString(),
+                  status: b.status === "overdue" ? "borrowed" : b.status,
+                }
+              : b,
+          ),
+        )
+      }
+    } catch (error) {
+      toast({
+        title: "Failed to extend due date",
+        description: "An unexpected error occurred.",
+        variant: "destructive",
+      })
+    }
+  }
+
+  if (isLoading) {
+    return (
+      <div className="text-center py-10">
+        <p>Loading borrowings...</p>
+      </div>
+    )
   }
 
   return (
@@ -144,10 +206,10 @@ export function BorrowingList() {
             <TableBody>
               {filteredBorrowings.map((borrowing) => (
                 <TableRow key={borrowing.id}>
-                  <TableCell className="font-medium">{borrowing.bookTitle}</TableCell>
-                  <TableCell>{borrowing.borrower}</TableCell>
-                  <TableCell>{borrowing.borrowDate}</TableCell>
-                  <TableCell>{borrowing.dueDate}</TableCell>
+                  <TableCell className="font-medium">{borrowing.books.title}</TableCell>
+                  <TableCell>{borrowing.user_id}</TableCell>
+                  <TableCell>{new Date(borrowing.borrow_date).toLocaleDateString()}</TableCell>
+                  <TableCell>{new Date(borrowing.due_date).toLocaleDateString()}</TableCell>
                   <TableCell>
                     <Badge
                       variant={

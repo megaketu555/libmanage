@@ -9,6 +9,7 @@ import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { useToast } from "@/hooks/use-toast"
+import { addBook } from "@/app/actions/books"
 
 export function AddBookForm() {
   const [formData, setFormData] = useState({
@@ -16,7 +17,7 @@ export function AddBookForm() {
     author: "",
     isbn: "",
     category: "",
-    publishedYear: "",
+    published_year: "",
     description: "",
     copies: "1",
   })
@@ -37,25 +38,39 @@ export function AddBookForm() {
     setIsLoading(true)
 
     try {
-      // In a real app, this would be an API call to add the book
-      // For demo purposes, we'll simulate a successful addition
-      await new Promise((resolve) => setTimeout(resolve, 1000))
-
-      toast({
-        title: "Book added",
-        description: `"${formData.title}" has been added to the library.`,
+      const { error } = await addBook({
+        title: formData.title,
+        author: formData.author,
+        isbn: formData.isbn || undefined,
+        category: formData.category || "Uncategorized",
+        published_year: formData.published_year ? Number.parseInt(formData.published_year) : undefined,
+        description: formData.description || undefined,
+        total_copies: Number.parseInt(formData.copies) || 1,
       })
 
-      // Reset form
-      setFormData({
-        title: "",
-        author: "",
-        isbn: "",
-        category: "",
-        publishedYear: "",
-        description: "",
-        copies: "1",
-      })
+      if (error) {
+        toast({
+          title: "Failed to add book",
+          description: error,
+          variant: "destructive",
+        })
+      } else {
+        toast({
+          title: "Book added",
+          description: `"${formData.title}" has been added to the library.`,
+        })
+
+        // Reset form
+        setFormData({
+          title: "",
+          author: "",
+          isbn: "",
+          category: "",
+          published_year: "",
+          description: "",
+          copies: "1",
+        })
+      }
     } catch (error) {
       toast({
         title: "Failed to add book",
@@ -83,7 +98,7 @@ export function AddBookForm() {
       <div className="grid gap-4 sm:grid-cols-2">
         <div className="space-y-2">
           <Label htmlFor="isbn">ISBN</Label>
-          <Input id="isbn" name="isbn" value={formData.isbn} onChange={handleChange} required />
+          <Input id="isbn" name="isbn" value={formData.isbn} onChange={handleChange} />
         </div>
         <div className="space-y-2">
           <Label htmlFor="category">Category</Label>
@@ -106,14 +121,13 @@ export function AddBookForm() {
 
       <div className="grid gap-4 sm:grid-cols-2">
         <div className="space-y-2">
-          <Label htmlFor="publishedYear">Published Year</Label>
+          <Label htmlFor="published_year">Published Year</Label>
           <Input
-            id="publishedYear"
-            name="publishedYear"
+            id="published_year"
+            name="published_year"
             type="number"
-            value={formData.publishedYear}
+            value={formData.published_year}
             onChange={handleChange}
-            required
           />
         </div>
         <div className="space-y-2">

@@ -4,13 +4,13 @@ import type React from "react"
 
 import { useState } from "react"
 import Link from "next/link"
-import { useRouter } from "next/navigation"
 import { BookOpen } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
 import { useToast } from "@/hooks/use-toast"
+import { useAuth } from "@/contexts/auth-context"
 
 export default function SignupPage() {
   const [formData, setFormData] = useState({
@@ -21,8 +21,8 @@ export default function SignupPage() {
     role: "student",
   })
   const [isLoading, setIsLoading] = useState(false)
-  const router = useRouter()
   const { toast } = useToast()
+  const { signUp } = useAuth()
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target
@@ -48,20 +48,24 @@ export default function SignupPage() {
     setIsLoading(true)
 
     try {
-      // In a real app, this would be an API call to register the user
-      // For demo purposes, we'll simulate a successful registration
-      await new Promise((resolve) => setTimeout(resolve, 1000))
+      const { error } = await signUp(formData.email, formData.password, formData.name, formData.role)
 
-      toast({
-        title: "Account created",
-        description: "Your account has been created successfully.",
-      })
-
-      router.push(`/dashboard/${formData.role}`)
+      if (error) {
+        toast({
+          title: "Registration failed",
+          description: error.message || "There was an error creating your account.",
+          variant: "destructive",
+        })
+      } else {
+        toast({
+          title: "Account created",
+          description: "Your account has been created successfully.",
+        })
+      }
     } catch (error) {
       toast({
         title: "Registration failed",
-        description: "There was an error creating your account.",
+        description: "An unexpected error occurred. Please try again.",
         variant: "destructive",
       })
     } finally {
